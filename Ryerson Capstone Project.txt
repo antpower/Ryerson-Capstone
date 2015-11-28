@@ -1,0 +1,931 @@
+# Dictionary
+
+"SERIALNO"	"HouseID"
+"SPORDER"	"PersonID"
+"ST"	"State"
+"PWGTP"	"Weight" 
+"AGEP"	"Age"
+"COW"	"ClassOfWorker"
+"ENG"	"English”
+"JWMNP"	"TimeOfTransportation"
+"JWRIP"	"Carpool"
+"JWTR"	"MeansOfTrnasportation"
+"LANX"	"LangAtHome"
+"MAR"	"MaritalStatus"
+"MARHD"	"Divorced1Y"
+"MARHM"	"Married1Y"
+"MARHT"	"NumberOfTimesMarried"
+"MARHW"	"Widowed1Y"
+"MIG"	"Mobility1Y"
+"MIL"	"MilService"
+"OIP"	"OtherIncome1Y"
+"PAP"	"AssisIncome1Y"
+"SCHL"	"Education"
+"SEMP"	"SelfEmIncome1Y"
+"SEX"	"Sex"
+"WAGP"	"Wage1Y"
+"WKHP"	"WorkHourPerWeek"
+"DIS"	"Disbility"
+"HICOV"	"HealthInsurance"
+"INDP"	"Industry" 
+"JWDP"	"TimeOfDeparture"
+"MSP"	"SpouseStatus"
+"OC"	"OwnChild"
+"OCCP"	"Occupation" 
+"PAOC"	"FemaleWithChild"
+"PERNP"	"TotalEarning"
+"PINCP"	"TotalIncome"
+
+
+> selectedAttributes <- c("SERIALNO", "SPORDER", "ST", "PWGTP", "SEX", "AGEP", "COW", "ENG", "JWMNP", "JWRIP", "JWTR", "LANX", "MAR", "MSP", "MARHD", "MARHM", "MARHT", "MARHW", "MIG", "MIL", "OIP", "PAP", "SCHL", "SEMP", "WAGP", "WKHP", "DIS", "HICOV", "INDP", "JWDP", "OC", "OCCP", "PAOC", "PERNP", "PINCP")
+
+> dataPartA <- fread("d:/ss13pusa.csv", select=selectedAttributes)
+Read 1613672 rows and 35 (of 283) columns from 1.416 GB file in 00:00:12
+> dataPartB <- fread("d:/ss13pusb.csv", select=selectedAttributes)
+Read 1519123 rows and 35 (of 283) columns from 1.333 GB file in 00:00:11
+> myData_org <- rbind(dataPartA, dataPartB)
+> rm(dataPartA, dataPartB)
+> save(myData_org, file="myData.RData")
+
+
+## Preprocessing the data
+# Remove the records in which the basic commuting information is missing
+> typeof(myData_org)
+[1] "list"
+
+# Using complete.cases() command to check rows which contains one or more NA values
+> myData_df[!complete.cases(myData_df),]
+
+# Dealing with the attribute of JWTR (Means_of_Trnasportation). After this step, the number of record reduces 57.5% from 3132795 to 1332303.
+> myData_ls <- myData_org[!is.na(myData_org$JWTR)]
+
+# Convert type of myData_ls from list to data frame in order to manipulate data easier
+> myData_df <- as.data.frame(myData_ls)
+> rm(myData_ls)
+
+
+
+## Replace NAs in attribute JWMNP (Commuting Time)with number 0. Because working at home means that the travel time to work is 0.
+> myData_df[is.na(myData_df$JWMNP),"JWMNP"] <- 0
+
+## Delete attribute ENG since it contains too many NAs. So is PWGTP.
+> myData_df <- myData_df [,c(1:3, 5:6,8:35)]
+
+## Dealing with NAs of the attribute MARHD, MARHM, MARHT and MARHW ("Divorced_in_1_Year","Married_in_1_Year","Number_of_Times_Married","Widowed_in_1_Year"). Replace NAs in these attributes with 0.
+> myData_df[is.na(myData_df$MARHD), "MARHD"] <- 0
+> myData_df[is.na(myData_df$MARHM), "MARHM"] <- 0
+> myData_df[is.na(myData_df$MARHT), "MARHT"] <- 0
+> myData_df[is.na(myData_df$MARHW), "MARHW"] <- 0
+> myData_df[is.na(myData_df$JWDP), "JWDP"] <- 0
+> myData_df[is.na(myData_df$JWRIP), "JWRIP"] <- 0
+> myData_df[is.na(myData_df$MIL), "MIL"] <- 0
+
+## Dealing with NAs of the attribute PAOC (Own Child). 
+# If a female whose age is over 15, then replace NA in attribute PAOC with 4, which is a female without own children.
+# For a male, replace NA in attribute PAOC with 0.
+> myData_df[is.na(myData_df$PAOC) & myData_df$SEX==2, "PAOC"] <- 4
+> myData_df[is.na(myData_df$PAOC) & myData_df$SEX==1, "PAOC"] <- 0
+
+
+## Remove those instances which has the age greater than 67. Because of retirement, those people are no longer at work.
+> plot(myData_org$AGEP,myData_org$JWMNP,xlab="Age", ylab="Commuting Time (Minutes)")
+ 
+myData_df <- myData_df[myData_df$AGEP <= 67,]
+
+
+# Dealing with categorical variables according the data dictionary
+> pus <- myData_df
+> pus$MAR <- factor(pus$MAR);
+> levels(pus$MAR) <- c("Married", "Widowed", "Divorced", "Separated", "Never married");
+> pus$COW <- factor(pus$COW);
+> levels(pus$COW) <- c("Private profit", "Private non-profit", "Local government", "State government", "Federal government", "Self-employed", "Self-employed", "Working without pay", "Unemployed");
+> pus$PAOC <- factor(pus$PAOC);
+
+> levels(pus$PAOC) <- c("Male or under-16 female", "Children under 6", "Children 6 to 17", "Children under 6 and 6 to 17", "No children");
+
+> pus$SCHL <- ifelse(pus$SCHL <= 16, 16, pus$SCHL);
+> pus$SCHL <- ifelse(pus$SCHL >= 17 & pus$SCHL <= 19, 19, pus$SCHL);
+> pus$SCHL <- factor(pus$SCHL);
+> levels(pus$SCHL) <- c("High school or lower", "Some college", "Associate's degree", "Bachelor's degree", "Master's degree", "Professional degree", "Doctorate degree");
+> pus$LANX <- factor(pus$LANX);
+> levels(pus$LANX) <- c("Other Language", "English");
+> pus$JWTR <- factor(pus$JWTR);
+> levels(pus$JWTR) <- c("Car", "public transportation", "public transportation", "public transportation", "public transportation", "public transportation", "Taxi", "Other", "Bicycle", "Walk", "Working at home", "Other");
+> pus$SEX <- factor(pus$SEX);
+> levels(pus$SEX) <- c("Male", "Female");
+> pus$MIG <- factor(pus$MIG);
+> levels(pus$MIG) <- c("Same house 1 year ago", "Out of US. 1 year ago", "Different house in US. 1 year ago");
+> pus$MIL <- factor(pus$MIL);
+> levels(pus$MIL) <- c("Never", "On duty now", "On duty in the past", "On duty in the past", "Never");
+> pus$HICOV <- factor(pus$HICOV);
+> levels(pus$HICOV) <- c("With health insurance", " Without health insurance");
+> pus$DIS <- factor(pus$DIS);
+> levels(pus$DIS) <- c("With a disability", "Without a disability");
+> pus$OC <- factor(pus$OC);
+> levels(pus$OC) <- c("No child", "Own child");
+> pus$MSP <- factor(pus$MSP);
+> levels(pus$MSP) <- c("Married, spouse present", "Married, spouse absent", "Widowed", "Divorced", "Separated", "Never married");
+
+
+
+
+
+# Rename the columns of the dataset so it’s easy to read.
+data <- pus;
+names(data) <- c("House_ID","Person_ID","State","Weight","Age","Class_of_Worker","Time_of_Transportation","Carpool","Means_of_Trnasportation","Language_at_Home","Marital_Status","Divorced_in_1_Year","Married_in_1_Year","Number_of_Times_Married","Widowed_in_1_Year","Mobility_in_1_Year","Military_Service","Other_Income_in_1_Year","Assistance_Income_in_1_Year","Education","Self-Employ_Income_in_1_Year","Sex","Wage_in_1_Year","Working_Hours_Per_Week","Disbility","Health_Insurance","Industry","Time_of_Departure","Spouse_Status","Own_Child","Occupation","Female_With_Child","Total_Earning","Total_Income");
+
+# Delete Industry and Occupation attribute as they are too specific to be analyzed.
+> data <- data[,-c(27,31)];
+ 
+  ## Commuting time
+# Boxplot
+# Commuting time is 0 means they don’t commute.
+> boxplot(data[data$Time_of_Transportation!=0,"Time_of_Transportation"], horizontal = TRUE, xlab="Commuting Time (Minutes)", main="Boxplot of Commuting Time")  
+> summary(data[data$Time_of_Transportation!=0,"Time_of_Transportation"])
+   Min.   1st Qu.  Median    Mean    3rd Qu.    Max. 
+   1.00   10.00     20.00    26.13   30.00     167.00
+
+> sd(data$Time_of_Transportation)
+[1] 22.5332
+
+# Commuting time can be divided into 4 subsets due to the histogram as below:
+> hist(data[data$Time_of_Transportation!=0,"Time_of_Transportation"], breaks = 20, xlab="Commuting Time", ylab="Frequency", main="Histogram on Commuting Time (breaks=20)")
+ 
+> hist(data[data$Time_of_Transportation!=0,"Time_of_Transportation"], breaks = 20, xlab="Commuting Time", ylab="Frequency", main="Histogram on Commuting Time (breaks=20)",freq=FALSE)
+> lines(density(data$Time_of_Transportation, adjust=4))  
+
+# Divide the dataset into 5 subsets by commuting time, 0 minute, less than 30 minutes, 30 – 60 minutes, 60-120 minutes and greater than 120 minutes. 
+> cmt0000 <- data[data$Time_of_Transportation == 0, ];
+
+> cmt0030 <- data[data$Time_of_Transportation <= 30 & data$Time_of_Transportation > 0, ];
+> cmt3060 <- data[data$Time_of_Transportation <= 60 & data$Time_of_Transportation > 30, ];
+> cmt60120 <- data[data$Time_of_Transportation <= 120 & data$Time_of_Transportation > 60, ];
+> cmt120167 <- data[data$Time_of_Transportation > 120,]
+ 
+
+# As result, each of the them has the percentage of 76.5%,  19.4%, 2.6% and 1.5% in the oringinal dataset respectively.
+# Pie chart (>=1 minute)
+> df <- data.frame( Commuting_Time = c("(0,30]", "(30,60]", "(60,120]", "(120,167]"), Pie_Chart_of_Commuting_Time = c(972871, 247095, 33418, 19060) );
+> library(ggplot2);
+> bp<- ggplot(df, aes(x="", y=Pie_Chart_of_Commuting_Time, fill = Commuting_Time))+ geom_bar(width = 1, stat = "identity");
+> pie <- bp + coord_polar("y", start=0);
+> library(scales);
+> pie + geom_text(aes(y = Pie_Chart_of_Commuting_Time /3 + c(20, cumsum(Pie_Chart_of_Commuting_Time)[-length(Pie_Chart_of_Commuting_Time)]), label = percent(Pie_Chart_of_Commuting_Time /sum(Pie_Chart_of_Commuting_Time))), size=6);
+ 
+
+
+# Boxplot of 4 Commuting Time Subsets
+> data$Commuting_Time_Subset <- cut(data$Time_of_Transportation, breaks = c(0, 30, 60, 120, 167))
+> ggplot(na.omit(data), aes(x = Commuting_Time_Subset, y = Time_of_Transportation)) + 
++ geom_boxplot(aes(fill = Commuting_Time_Subset), alpha = 0.5) + 
++ labs(x = "4 Subsets", y = "Commuting Time (Minutes)", title = "Boxplot of 4 Commuting Time Subsets")
+ 
+> summary(cmt0030$Time_of_Transportation)
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   1.00   10.00   15.00   16.79   25.00   30.00 
+> summary(cmt3060$Time_of_Transportation)
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+  31.00   40.00   45.00   46.49   52.00   60.00 
+> summary(cmt60120$Time_of_Transportation)
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+  61.00   75.00   80.00   82.07   90.00  119.00 
+> summary(cmt120167$Time_of_Transportation)
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+  124.0   128.0   142.0   140.8   149.0   167.0 
+
+
+
+# Continuous variables
+> cor(data[c(5,8,14,19,21,23,24,31,32)],data[7])
+                             Time_of_Transportation
+Age                                     0.034195925
+Carpool                                 0.071076596
+Number_of_Times_Married                 0.030024166
+Assistance_Income_in_1_Year             0.001123271
+Self-Employ_Income_in_1_Year           -0.027015160
+Wage_in_1_Year                          0.101540033
+Working_Hours_Per_Week                  0.090982639
+Total_Earning                           0.087678150
+Total_Income                            0.080514761
+Education Level                         0.01089038 
+
+
+
+
+> cor_table <- cbind(cor(cmt0030[c(5,8,14,19,21,23,24,31,32)],cmt0030[7]), cor(cmt3060[c(5,8,14,19,21,23,24,31,32)],cmt3060[7]), cor(cmt60120[c(5,8,14,19,21,23,24,31,32)],cmt60120[7]), cor(cmt120167[c(5,8,14,19,21,23,24,31,32)],cmt120167[7]));
+> cor_table <- as.data.frame(cor_table);
+> names(cor_table) <- c("(0,30]","(30,60]","(60,120]","(120,167]");
+> cor_table
+                                 (0,30]      (30,60]    (60,120]    (120,167]
+Age                          0.037535991 -0.004879517 -0.01118419 -0.007552005
+Carpool                      0.059808395 -0.027261753 -0.03679147  0.019192302
+Number_of_Times_Married      0.027606439 -0.015141056 -0.03530053 -0.001875927
+Assistance_Income_in_1_Year -0.002831409  0.004208176  0.01046462 -0.012713193
+Self-Employ_Income_in_1_Year-0.022444580  0.003134661  0.01798547  0.017599460
+Wage_in_1_Year               0.082628523  0.010302286 -0.03529493  0.064870713
+Working_Hours_Per_Week       0.063507268  0.012240944 -0.02657652  0.102437546
+Total_Earning                0.070837642  0.010875759 -0.02947477  0.068568999
+Total_Income                 0.064829350  0.009646317 -0.03007320  0.068762464
+
+> cmt0015 <- data[data$Time_of_Transportation <= 15 & data$Time_of_Transportation > 0, ];
+> cmt1530 <- data[data$Time_of_Transportation <= 30 & data$Time_of_Transportation > 15, ];
+> cor_table <- cbind(cor(cmt0015[c(5,8,14,19,21,23,24,31,32)],cmt0015[7]), cor(cmt1530[c(5,8,14,19,21,23,24,31,32)],cmt1530[7]), cor(cmt3060[c(5,8,14,19,21,23,24,31,32)],cmt3060[7]), cor(cmt60120[c(5,8,14,19,21,23,24,31,32)],cmt60120[7]), cor(cmt120167[c(5,8,14,19,21,23,24,31,32)],cmt120167[7]));
+> cor_table <- as.data.frame(cor_table);
+> names(cor_table) <- c("(0,15]","(15,30]","(30,60]","(60,120]","(120,167]");
+> cor_table
+                                    (0,15]      (15,30]      (30,60]    (60,120]    (120,167]
+Age                           0.0167002628 -0.009134716 -0.004879517 -0.01118419 -0.007552005
+Carpool                       0.0995709269 -0.002447750 -0.027261753 -0.03679147  0.019192302
+Number_of_Times_Married       0.0050415656 -0.002829151 -0.015141056 -0.03530053 -0.001875927
+Assistance_Income_in_1_Year  -0.0005870466 -0.001090101  0.004208176  0.01046462 -0.012713193
+Self-Employ_Income_in_1_Year -0.0317845099  0.001260115  0.003134661  0.01798547  0.017599460
+Wage_in_1_Year                0.0608441085  0.011781873  0.010302286 -0.03529493  0.064870713
+Working_Hours_Per_Week        0.0176670552  0.023887086  0.012240944 -0.02657652  0.102437546
+Total_Earning                 0.0452440699  0.011692278  0.010875759 -0.02947477  0.068568999
+Total_Income                  0.0408491705  0.009022488  0.009646317 -0.03007320  0.068762464
+
+
+## Weight (not a reasonable attribute)
+> summary(myData_org$PWGTP)
+   Min. 1st Qu.  Median    Mean    3rd Qu.    Max. 
+    1.0    55.0        80.0        103.5     125.0    2112.0
+
+## Age
+
+# This plot doesn’t give us a clear pattern between age and commuting time.
+> plot(myData_df$AGEP, myData_df$JWMNP,xlab="Age",ylab=" Commuting Time ",main="Age vs. Commuting Time Plot")
+ 
+# However, through the 4 subsets divided by previous steps, we can see that Age has a slightly upward trend when Commuting Time goes more.
+> mean(data1$AGEP)
+[1] 42.05983
+> mean(data2$AGEP)
+[1] 42.99918
+> mean(data3$AGEP)
+[1] 43.70809
+> mean(data4$AGEP)
+[1] 44.32954
+> boxplot(data1$AGEP, data2$AGEP, data3$AGEP, data4$AGEP, horizontal=TRUE)
+ 
+> ggplot(na.omit(data), aes(x = Commuting_Time_Subset, y = Age)) + 
++ geom_boxplot(aes(fill = Commuting_Time_Subset), alpha = 0.5) + 
++ labs(x = "4 Subsets", y = "Age (Years)", title = "Age vs. Commuting Time")
+ 
+
+
+> test <- ggplot(data, aes(x=Age))
+> test + geom_histogram(binwidth=2,aes(fill=..count..))+ 
++     scale_fill_gradient("Count", low = "yellow", high = "blue")  + labs(y = "Count", title = "Histogram of Age")
+ 
+
+# From age-commuting-time histogram we can see almost every age are relatively reducing gradually through these 4 commuting time sub- dataset, except age 50 to 60. 
+# Density plot
+> test <- ggplot(data, aes(x=Age,  group=Time_of_Transportation))
+> test + geom_density(fill=NA) + labs(y = "Density", title = "Age Density for Commuting Time Subsets")
+ 
+
+
+## Earning and Income
+# Wage
+> plot(myData_df$WAGP, myData_df$JWMNP, xlab="Wage",ylab=" Commuting Time ",main="Wage vs. Commuting Time Plot")
+  
+
+# Mean values of Earning and Income (US. Dollars)
+Commuting Time /
+Mean Value	0-30 mins	30-60 mins	60-120 mins	>120 mins
+Total income	47952.91	60061.98	71700.24	60012.51
+Total Earning	45489.78	57704.13	68737.26	57572.47
+Wage	42935.91	55481.63	66136.31	53996.59
+Other Income	309.5504	324.7398	367.5079	360.5316
+Assistant Income	22.73904	22.49426	28.00138	27.9297
+
+# Most of people who don’t have assistance income or other income.
+## Total income, total earning and Wage
+# Boxplots with outliers
+> ggplot(na.omit(data), aes(x = Commuting_Time_Subset, y = Total_Income)) + 
++ geom_boxplot(aes(fill = Commuting_Time_Subset), alpha = 0.5) + 
++ labs(x = "4 Subsets", y = "Total Income (US. Dollars)", title = " Total Income vs. Commuting Time")
+ 
+# Boxplots without outliers
+# The 60-120 mins subset gives us the most average values on income attributes than other 3 subsets.
+> ggplot(na.omit(data), aes(x = Commuting_Time_Subset, y = Total_Income)) + 
++ geom_boxplot(aes(fill = Commuting_Time_Subset), alpha = 0.5, outlier.shape = NA) + 
++ labs(x = "4 Subsets", y = "Total Income (US. Dollars)", title = " Total Income vs. Commuting Time (Without outliers)") + coord_cartesian(ylim=c(0,180000))
+Warning messages:
+1: Removed 59188 rows containing missing values (geom_point). 
+2: Removed 14141 rows containing missing values (geom_point). 
+3: Removed 1812 rows containing missing values (geom_point). 
+4: Removed 1053 rows containing missing values (geom_point). 
+
+ 
+> ggplot(na.omit(data), aes(x = Commuting_Time_Subset, y = Total_Earning)) + 
++ geom_boxplot(aes(fill = Commuting_Time_Subset), alpha = 0.5, outlier.shape = NA) + 
++ labs(x = "4 Subsets", y = "Total Earning (US. Dollars)", title = " Total Earning vs. Commuting Time (Without outliers)") + coord_cartesian(ylim=c(0,180000))
+Warning messages:
+1: Removed 56839 rows containing missing values (geom_point). 
+2: Removed 14514 rows containing missing values (geom_point). 
+3: Removed 1726 rows containing missing values (geom_point). 
+4: Removed 1074 rows containing missing values (geom_point).
+ 
+> ggplot(na.omit(data), aes(x = Commuting_Time_Subset, y = Wage_in_1_Year)) + 
++ geom_boxplot(aes(fill = Commuting_Time_Subset), alpha = 0.5, outlier.shape = NA) + 
++ labs(x = "4 Subsets", y = "Wage (US. Dollars)", title = " Wage vs. Commuting Time (Without outliers)") + coord_cartesian(ylim=c(0,180000))
+
+Warning messages:
+1: Removed 51658 rows containing missing values (geom_point). 
+2: Removed 12531 rows containing missing values (geom_point). 
+3: Removed 1639 rows containing missing values (geom_point). 
+4: Removed 967 rows containing missing values (geom_point). 
+ 
+
+
+
+## Categorical variables
+## SEX
+# There is no clear difference on commuting time between genders by the XYplot.
+#  But comparing to male, female amount is relatively decreasing while commuting time is rising.
+
+> library("lattice")
+> xyplot(AGEP~JWMNP | SEX, data = myData_df)
+ 
+> p1 <- qplot(factor(Sex), data=cmt0030, geom="bar", fill=Sex) + labs(x="Sex", y="Count", title="Sex in the 0-30 Minutes Group");
+> p2 <- qplot(factor(Sex), data=cmt3060, geom="bar", fill=Sex) + labs(x="Sex", y="Count", title="Sex in the 30-60 Minutes Group");
+> p3 <- qplot(factor(Sex), data=cmt60120, geom="bar", fill=Sex) + labs(x="Sex", y="Count", title="Sex in the 60-120 Minutes Group");
+> p4 <- qplot(factor(Sex), data=cmt120167, geom="bar", fill=Sex) + labs(x="Sex", y="Count", title="Sex in the 120-167 Minutes Group");
+> install.packages("cowplot");
+> library("cowplot");
+> plot_grid(p1, p2, p3, p4, ncol = 4, nrow = 1);
+ 
+
+## Means of Transportation
+# This should be the most important element to impact commuting time.
+# Bar charts
+> ggplot(data,
++        aes(x = factor(Means_of_Trnasportation), fill = Means_of_Trnasportation) ) +
++     geom_bar() + labs(x="Means of Transportation", y="Count", title="Bar Chart of Means of Transportation")
+ 
+> prop.table(table(data$Means_of_Trnasportation))
+                  Car          0.8610353651
+public transportation          0.0465156950
+      Working at home          0.0449289689
+                 Walk          0.0298355554
+                Other          0.0106882594
+              Bicycle          0.0060872039
+                 Taxi          0.0009089524
+
+ggplot(data[data$Means_of_Trnasportation!="Car" & data$Means_of_Trnasportation!="Working at home",], aes(x = factor(Means_of_Trnasportation), fill = Means_of_Trnasportation) ) + geom_bar() + labs(x="Means of Transportation", y="Count", title="Bar Chart of Means of Transportation Except Car and Working at Home")  
+# 
+
+
+
+> prop.table(table(data[data$Means_of_Trnasportation!="Car" & data$Means_of_Trnasportation!="Working at home","Means_of_Trnasportation"]))
+ Public transportation           0.494660132
+                  Walk           0.317279142
+                 Other           0.113661760
+               Bicycle           0.064732927
+                  Taxi           0.009666039
+
+
+
+
+
+
+
+
+#car
+> mot_car <- ggplot(data[data$Means_of_Trnasportation=="Car",], aes(x=Time_of_Transportation))+ geom_histogram(binwidth=5,aes(fill=..count..))+ 
++ scale_fill_gradient("Count", low = "yellow", high = "blue")  + labs(y = "Frequency", title = "Histogram of Commuting Time by Car")
+ 
+# Work at home
+It means they don’t commute.
+# Walk
+> mot_walk <- ggplot(data[data$Means_of_Trnasportation=="Walk",], aes(x=Time_of_Transportation))+ geom_histogram(binwidth=5,aes(fill=..count..))+ 
++ scale_fill_gradient("Count", low = "yellow", high = "blue")  + labs(y = "Frequency", title = "Histogram of Commuting Time by Walk")
+ 
+# Public transportation
+> mot_pub <- ggplot(data[data$Means_of_Trnasportation=="public transportation",], aes(x=Time_of_Transportation)) + geom_histogram(binwidth=10,aes(fill=..count..))+ 
++  scale_fill_gradient("Count", low = "yellow", high = "blue")  + labs(y = "Frequency", title = "Histogram of Commuting Time by Public Transportation")
+ 
+
+# Taxi
+> mot_cab <- ggplot(data[data$Means_of_Trnasportation=="Taxi",], aes(x=Time_of_Transportation))+ geom_histogram(binwidth=5,aes(fill=..count..))+ 
++ scale_fill_gradient("Count", low = "yellow", high = "blue")  + labs(y = "Frequency", title = "Histogram of Commuting Time by Taxi")
+ 
+# Bicycle
+> mot_bike <- ggplot(data[data$Means_of_Trnasportation=="Bicycle",], aes(x=Time_of_Transportation))+ geom_histogram(binwidth=5,aes(fill=..count..))+ 
++ scale_fill_gradient("Count", low = "yellow", high = "blue")  + labs(y = "Frequency", title = "Histogram of Commuting Time by Bicycle")
+ 
+# Other
+> mot_oth <- ggplot(data[data$Means_of_Trnasportation=="Other",], aes(x=Time_of_Transportation))+ geom_histogram(binwidth=5,aes(fill=..count..))+ 
++ scale_fill_gradient("Count", low = "yellow", high = "blue")  + labs(y = "Frequency", title = "Histogram of Commuting Time by Other Transportation Tools")
+ 
+## Class of Worker
+> summary(data[data$Class_of_Worker=="Private profit","Time_of_Transportation"]);
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   0.00   10.00   20.00   26.12   30.00  167.00 
+
+> summary(data[data$Class_of_Worker=="Private non-profit","Time_of_Transportation"]);
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   0.00   10.00   20.00   23.69   30.00  167.00 
+
+> summary(data[data$Class_of_Worker=="Local government","Time_of_Transportation"]);
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+    0.0    10.0    20.0    22.5    30.0   167.0 
+
+> summary(data[data$Class_of_Worker=="State government","Time_of_Transportation"]);
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   0.00   10.00   20.00   24.01   30.00  167.00 
+
+> summary(data[data$Class_of_Worker=="Federal government","Time_of_Transportation"]);
+ 
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   0.00   10.00   20.00   27.35   35.00  167.00 
+
+> summary(data[data$Class_of_Worker=="Self-employed","Time_of_Transportation"]);
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   0.00    3.00   15.00   19.59   30.00  167.00 
+
+> summary(data[data$Class_of_Worker=="Working without pay","Time_of_Transportation"]);
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   0.00    1.00   10.00   17.32   25.00  152.00
+
+## Marital Status
+> summary(data[data$Marital_Status =="Married","Time_of_Transportation"]);
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   0.00   10.00   20.00   25.59   30.00  167.00 
+> summary(data[data$Marital_Status =="Widowed","Time_of_Transportation"]);
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   0.00   10.00   20.00   23.68   30.00  167.00 
+> summary(data[data$Marital_Status =="Divorced","Time_of_Transportation"]);
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   0.00   10.00   20.00   25.03   30.00  167.00 
+> summary(data[data$Marital_Status =="Separated","Time_of_Transportation"]);
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   0.00   10.00   20.00   25.99   30.00  167.00 
+> summary(data[data$Marital_Status =="Never married","Time_of_Transportation"]);
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   0.00   10.00   20.00   23.62   30.00  167.00 
+
+
+## Disability
+# Without a disability
+> ggplot(data[data$Disbility=="Without a disability",], aes(x=Time_of_Transportation))+ geom_histogram(binwidth=5,aes(fill=..count..))+ 
++ scale_fill_gradient("Count", low = "yellow", high = "blue")  + labs(y = "Frequency", title = "Histogram of Commuting Time Without a disability")
+ 
+> summary(data[data$Disbility=="Without a disability","Time_of_Transportation"])
+   Min.  1st Qu.  Median    Mean   3rd Qu.    Max. 
+   0.00   10.00    20.00   24.94   30.00    167.00 
+
+# With a disability
+> ggplot(data[data$Disbility=="With a disability",], aes(x=Time_of_Transportation))+ geom_histogram(binwidth=5,aes(fill=..count..))+ 
++ scale_fill_gradient("Count", low = "yellow", high = "blue")  + labs(y = "Frequency", title = "Histogram of Commuting Time With a disability")
+ 
+> summary(data[data$Disbility=="With a disability","Time_of_Transportation"])
+   Min. 1st Qu.  Median    Mean   3rd Qu.    Max. 
+   0.00   10.00   20.00   25.18   30.00    167.00 
+
+# Health insurance 
+# With Health insurance
+> ggplot(data[data$Health_Insurance =="With health insurance",], aes(x=Time_of_Transportation))+ geom_histogram(binwidth=5,aes(fill=..count..))+ 
++ scale_fill_gradient("Count", low = "yellow", high = "blue")  + labs(y = "Frequency", title = "Histogram of Commuting Time With Health Insurance ")
+ 
+> summary(data[data$Health_Insurance =="With health insurance","Time_of_Transportation"])
+   Min.  1st Qu.  Median    Mean   3rd Qu.    Max. 
+   0.00   10.00   20.00    25.07   30.00    167.00 
+
+## Female With Child
+# Children under 6
+> ggplot(data[data$Female_With_Child=="Children under 6",], aes(x=Time_of_Transportation))+ geom_histogram(binwidth=5,aes(fill=..count..))+ 
++ scale_fill_gradient("Count", low = "yellow", high = "blue")  + labs(y = "Frequency", title = "Histogram of Commuting Time by Children under 6")
+ 
+# Children 6 to 17
+> ggplot(data[data$Female_With_Child=="Children 6 to 17",], aes(x=Time_of_Transportation))+ geom_histogram(binwidth=5,aes(fill=..count..))+ 
++ scale_fill_gradient("Count", low = "yellow", high = "blue")  + labs(y = "Frequency", title = "Histogram of Commuting Time by Children 6 to 17")
+ 
+# Children under 6 and 6 to 17
+> ggplot(data[data$Female_With_Child=="Children under 6 and 6 to 17",], aes(x=Time_of_Transportation))+ geom_histogram(binwidth=5,aes(fill=..count..))+ 
++ scale_fill_gradient("Count", low = "yellow", high = "blue")  + labs(y = "Frequency", title = "Histogram of Commuting Time by Children under 6 and 6 to 17")
+ 
+
+# Without Health insurance
+> ggplot(data[data$Health_Insurance ==" Without health insurance",], aes(x=Time_of_Transportation))+ geom_histogram(binwidth=5,aes(fill=..count..))+ 
++ scale_fill_gradient("Count", low = "yellow", high = "blue")  + labs(y = "Frequency", title = "Histogram of Commuting Time Without Health Insurance")
+ 
+> summary(data[data$Health_Insurance ==" Without health insurance","Time_of_Transportation"])
+   Min.  1st Qu.  Median    Mean   3rd Qu.    Max. 
+   0.00   10.00   20.00     24.25   30.00    167.00
+
+## Language at Home
+# English
+> ggplot(data[data$Language_at_Home =="English",], aes(x=Time_of_Transportation))+ geom_histogram(binwidth=5,aes(fill=..count..))+ 
++  scale_fill_gradient("Count", low = "yellow", high = "blue")  + labs(y = "Frequency", title = "Histogram of Commuting Time by Speaking English at Home")
+ 
+> summary(data[data$Language_at_Home =="English","Time_of_Transportation"])
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+    0.0    10.0    20.0    24.5    30.0   167.0 
+
+
+# Other language
+> ggplot(data[data$Language_at_Home =="Other Language",], aes(x=Time_of_Transportation))+ geom_histogram(binwidth=5,aes(fill=..count..))+ 
++  scale_fill_gradient("Count", low = "yellow", high = "blue")  + labs(y = "Frequency", title = "Histogram of Commuting Time by Not Speaking English at Home")
+ 
+> summary(data[data$Language_at_Home =="Other Language","Time_of_Transportation"])
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   0.00   12.00   20.00   26.95   35.00  167.00 
+
+
+## State
+stateCodeCSV = "State,region
+001,alabama
+002,alaska
+004,arizona
+005,arkansas
+006,california
+008,colorado
+009,connecticut
+010,delaware
+011,district of columbia
+012,florida
+013,georgia
+015,hawaii
+016,idaho
+017,illinois
+018,indiana
+019,iowa
+020,kansas
+021,kentucky
+022,louisiana
+023,maine
+024,maryland
+025,massachusetts
+026,michigan
+027,minnesota
+028,mississippi
+029,missouri
+030,montana
+031,nebraska
+032,nevada
+033,new hampshire
+034,new jersey
+035,new mexico
+036,new york
+037,north carolina
+038,north dakota
+039,ohio
+040,oklahoma
+041,oregon
+042,pennsylvania
+044,rhode island
+045,south carolina
+046,south dakota
+047,tennessee
+048,texas
+049,utah
+050,vermont
+051,virginia
+053,washington
+054,west virginia
+055,wisconsin
+056,wyoming";
+> library("data.table");
+> stateCodes <- fread(stateCodeCSV);
+
+# Average Commuting Time by State
+> data_table <- as.data.table(data)
+> library("dplyr");
+> state_cmt  <- data_table%>%
++ filter(Time_of_Transportation>=0)%>%
++ group_by(State)%>%
++ summarise(total = sum(Time_of_Transportation), count = n());
+> state_cmt <- right_join(state_cmt , stateCodes, by.x=c("State"));
+> state_cmt [is.na(state_cmt)] <- 0;
+> state_cmt <- mutate(state_cmt, value = total/count);
+
+> library("choroplethr");
+> install.packages("choroplethrMaps");
+> library("choroplethrMaps");
+state_choropleth(state_cmt, title = "Average Commuting Time by State (in Minute)");
+ 
+
+# Which state is the one that car is the most used commuting tool
+> library("dplyr");
+> state_car  <- data_table%>%
++ filter(Means_of_Trnasportation=="Car")%>%
++ group_by(State)%>%
++ summarise(count = n());
+> state_car <- right_join(state_car, stateCodes, by.x=c("State"));
+> state_car [is.na(state_car)] <- 0;
+> state_car <- mutate(state_car, value = count);
+
+> library("choroplethr");
+> install.packages("choroplethrMaps");
+> library("choroplethrMaps");
+state_choropleth(state_car, title = "Commuting by Car");
+ 
+
+# Which state is the one that people are working at home the most 
+> library("dplyr");
+> state_home  <- data_table%>%
++ filter(Means_of_Trnasportation=="Working at home")%>%
++ group_by(State)%>%
++ summarise(count = n());
+> state_home <- right_join(state_home, stateCodes, by.x=c("State"));
+> state_home [is.na(state_home)] <- 0;
+> state_home <- mutate(state_home, value = count);
+
+> library("choroplethr");
+> install.packages("choroplethrMaps");
+> library("choroplethrMaps");
+state_choropleth(state_home, title = "Working at Home");
+ 
+
+# Average Wage by State
+> library("dplyr");
+> state_wage  <- data_table%>%
++ filter(Wage_in_1_Year>=0)%>%
++ group_by(State)%>%
++ summarise(total = sum(Wage_in_1_Year), count = n());
+> state_wage <- right_join(state_wage , stateCodes, by.x=c("State"));
+> state_wage [is.na(state_wage)] <- 0;
+> state_wage <- mutate(state_wage, value = total/count);
+
+> library("choroplethr");
+> install.packages("choroplethrMaps");
+> library("choroplethrMaps");
+state_choropleth(state_wage, title = "Average Wage by State (Dollars)");
+ 
+ 
+
+
+
+## Building predictive model
+# According to previous analysis, the attributes I am going to use to predict commuting time are  "State", "Age", "Class_of_Worker" , "Carpool", "Means_of_Trnasportation", "Language_at_Home", "Marital_Status", "Sex, "Wage_in_1_Year", "Working_Hours_Per_Week", "Own_Child" and "Female_With_Child".
+data_mdl <- data[c(3,5,6,8,9,10,11,22,23,24,29,30,7)]
+backup <- data_mdl
+
+# Dealing with categorical variables using dummy variable method
+for(i in 1:56) 
+{ 
+ colnames(data_mdl)[i+13] <- paste("state", i, sep = "")
+ ifelse(data_mdl$State==i, assign(colnames(data_mdl)[i+13], 1), assign(colnames(data_mdl)[i+13], 0))
+}
+data_mdl$state1 <- ifelse(data_mdl$State==1, 1,0);
+data_mdl$state2 <- ifelse(data_mdl$State==2, 1,0);
+data_mdl$state3 <- ifelse(data_mdl$State==3, 1,0);
+data_mdl$state4 <- ifelse(data_mdl$State==4, 1,0);
+data_mdl$state5 <- ifelse(data_mdl$State==5, 1,0);
+data_mdl$state6 <- ifelse(data_mdl$State==6, 1,0);
+data_mdl$state7 <- ifelse(data_mdl$State==7, 1,0);
+data_mdl$state8 <- ifelse(data_mdl$State==8, 1,0);
+data_mdl$state9 <- ifelse(data_mdl$State==9, 1,0);
+data_mdl$state10 <- ifelse(data_mdl$State==10, 1,0);
+data_mdl$state11 <- ifelse(data_mdl$State==11, 1,0);
+data_mdl$state12 <- ifelse(data_mdl$State==12, 1,0);
+data_mdl$state13 <- ifelse(data_mdl$State==13, 1,0);
+data_mdl$state14 <- ifelse(data_mdl$State==14, 1,0);
+data_mdl$state15 <- ifelse(data_mdl$State==15, 1,0);
+data_mdl$state16 <- ifelse(data_mdl$State==16, 1,0);
+data_mdl$state17 <- ifelse(data_mdl$State==17, 1,0);
+data_mdl$state18 <- ifelse(data_mdl$State==18, 1,0);
+data_mdl$state19 <- ifelse(data_mdl$State==19, 1,0);
+data_mdl$state20 <- ifelse(data_mdl$State==20, 1,0);
+data_mdl$state21 <- ifelse(data_mdl$State==21, 1,0);
+data_mdl$state22 <- ifelse(data_mdl$State==22, 1,0);
+data_mdl$state23 <- ifelse(data_mdl$State==23, 1,0);
+data_mdl$state24 <- ifelse(data_mdl$State==24, 1,0);
+data_mdl$state25 <- ifelse(data_mdl$State==25, 1,0);
+data_mdl$state26 <- ifelse(data_mdl$State==26, 1,0);
+data_mdl$state27 <- ifelse(data_mdl$State==27, 1,0);
+data_mdl$state28 <- ifelse(data_mdl$State==28, 1,0);
+data_mdl$state29 <- ifelse(data_mdl$State==29, 1,0);
+data_mdl$state30 <- ifelse(data_mdl$State==30, 1,0);
+data_mdl$state31 <- ifelse(data_mdl$State==31, 1,0);
+data_mdl$state32 <- ifelse(data_mdl$State==32, 1,0);
+data_mdl$state33 <- ifelse(data_mdl$State==33, 1,0);
+data_mdl$state34 <- ifelse(data_mdl$State==34, 1,0);
+data_mdl$state35 <- ifelse(data_mdl$State==35, 1,0);
+data_mdl$state36 <- ifelse(data_mdl$State==36, 1,0);
+data_mdl$state37 <- ifelse(data_mdl$State==37, 1,0);
+data_mdl$state38 <- ifelse(data_mdl$State==38, 1,0);
+data_mdl$state39 <- ifelse(data_mdl$State==39, 1,0);
+data_mdl$state40 <- ifelse(data_mdl$State==40, 1,0);
+data_mdl$state41 <- ifelse(data_mdl$State==41, 1,0);
+data_mdl$state42 <- ifelse(data_mdl$State==42, 1,0);
+data_mdl$state43 <- ifelse(data_mdl$State==43, 1,0);
+data_mdl$state44 <- ifelse(data_mdl$State==44, 1,0);
+data_mdl$state45 <- ifelse(data_mdl$State==45, 1,0);
+data_mdl$state46 <- ifelse(data_mdl$State==46, 1,0);
+data_mdl$state47 <- ifelse(data_mdl$State==47, 1,0);
+data_mdl$state48 <- ifelse(data_mdl$State==48, 1,0);
+data_mdl$state49 <- ifelse(data_mdl$State==49, 1,0);
+data_mdl$state50 <- ifelse(data_mdl$State==50, 1,0);
+data_mdl$state51 <- ifelse(data_mdl$State==51, 1,0);
+data_mdl$state52 <- ifelse(data_mdl$State==52, 1,0);
+data_mdl$state53 <- ifelse(data_mdl$State==53, 1,0);
+data_mdl$state54 <- ifelse(data_mdl$State==54, 1,0);
+data_mdl$state55 <- ifelse(data_mdl$State==55, 1,0);
+data_mdl$state56 <- ifelse(data_mdl$State==56, 1,0);
+
+data_mdl$mot1 <- ifelse(data_mdl$ Means_of_Trnasportation=="Car", 1,0);
+data_mdl$mot2 <- ifelse(data_mdl$ Means_of_Trnasportation=="public transportation", 1,0);
+data_mdl$mot3 <- ifelse(data_mdl$ Means_of_Trnasportation=="Taxi", 1,0);
+data_mdl$mot4 <- ifelse(data_mdl$ Means_of_Trnasportation=="Other", 1,0);
+data_mdl$mot5 <- ifelse(data_mdl$ Means_of_Trnasportation=="Bicycle", 1,0);
+data_mdl$mot6 <- ifelse(data_mdl$ Means_of_Trnasportation=="Walk", 1,0);
+data_mdl$mot7 <- ifelse(data_mdl$ Means_of_Trnasportation=="Working at home", 1,0);
+
+
+data_mdl$lan1 <- ifelse(data_mdl$Language_at_Home=="English", 1,0);
+data_mdl$lan2 <- ifelse(data_mdl$Language_at_Home=="Other Language", 1,0);
+
+data_mdl$cow1 <- ifelse(data_mdl$Language_at_Home=="Private profit", 1,0);
+data_mdl$cow2 <- ifelse(data_mdl$Language_at_Home=="Private non-profit", 1,0);
+data_mdl$cow3 <- ifelse(data_mdl$Language_at_Home=="Local government", 1,0);
+data_mdl$cow4 <- ifelse(data_mdl$Language_at_Home=="State government", 1,0);
+data_mdl$cow5 <- ifelse(data_mdl$Language_at_Home=="Federal government", 1,0);
+data_mdl$cow6 <- ifelse(data_mdl$Language_at_Home=="Self-employed", 1,0);
+data_mdl$cow7 <- ifelse(data_mdl$Language_at_Home=="Working without pay", 1,0);
+data_mdl$cow8 <- ifelse(data_mdl$Language_at_Home=="Unemployed", 1,0);
+
+data_mdl$mar1 <- ifelse(data_mdl$Marital_Status=="Married", 1,0);
+data_mdl$mar2<- ifelse(data_mdl$Marital_Status=="Widowed", 1,0);
+data_mdl$mar3 <- ifelse(data_mdl$Marital_Status=="Divorced", 1,0);
+data_mdl$mar4<- ifelse(data_mdl$Marital_Status=="Separated", 1,0);
+data_mdl$mar5 <- ifelse(data_mdl$Marital_Status=="Never married", 1,0);
+
+data_mdl$sex1 <- ifelse(data_mdl$Sex=="Male", 1,0);
+data_mdl$sex2 <- ifelse(data_mdl$Sex=="Female", 1,0);
+
+data_mdl$oc1 <- ifelse(data_mdl$Own_Child=="Own child", 1,0);
+data_mdl$oc2 <- ifelse(data_mdl$Own_Child=="No child", 1,0);
+
+data_mdl$fwc1 <- ifelse(data_mdl$Female_With_Child=="Male or under-16 female", 1,0);
+data_mdl$fwc2 <- ifelse(data_mdl$Female_With_Child=="Children under 6", 1,0);
+data_mdl$fwc3 <- ifelse(data_mdl$Female_With_Child=="Children 6 to 17", 1,0);
+data_mdl$fwc4 <- ifelse(data_mdl$Female_With_Child=="Children under 6 and 6 to 17", 1,0);
+data_mdl$fwc5 <- ifelse(data_mdl$Female_With_Child=="No children", 1,0);
+
+> data_mdl <- data_mdl[-c(1,3,5,6,7,8,11,12)];
+> mdl_dummy <- data_mdl;
+> mdl_dummy <- mdl_dummy [mdl_dummy$mot7!=1,];
+> mdl_dummy <- mdl_dummy [-68];
+> mdl <- backup;
+> mdl <- mdl [mdl$Means_of_Trnasportation!= "Working at home",];
+ 
+## Linear Regression Model
+> m1 <- lm(Time_of_Transportation~.,data=mdl);
+> m2 <- lm(Time_of_Transportation~.,data=mdl_dummy);
+
+> reg_result <- data.frame(mdl$Time_of_Transportation, m1$fitted, m2$fitted);
+> names(reg_result) <- c("Actual_Time","Predicted_Time_using_lm","Predicted_Time_using_lm_and_dummy_variable");
+
+> hist(reg_result[,2], main="Histogram of Predicted Time Using lm", xlab="Commuting Time (minutes)");
+ 
+> hist(reg_result[,3], main="Histogram of Predicted Time Using lm and Dummy Variables", xlab="Commuting Time (minutes)");
+ 
+# Observe residuals
+
+> reg_rsd <- data.frame(m1$residuals,m2$residuals);
+> names(reg_rsd) <- c("Residuals_by_using_lm","Residuals_by_using_lm_and_dummy_variable");
+
+prop.table(table(ifelse(abs(reg_rsd$Residuals_by_using_lm)>abs(reg_rsd$Residuals_by_using_lm_and_dummy_variable),TRUE,FALSE)));
+   FALSE     TRUE 
+0.490802 0.509198 
+
+> ggplot(reg_rsd, aes(x=Residuals_by_using_lm_and_dummy_variable))+ geom_histogram(binwidth=5,aes(fill=..count..))+labs(y = "Frequency", title = "Histogram of Residuals by using lm with Dummy Variables")+scale_fill_gradient("Count", low = "yellow", high = "blue");
+ 
+
+
+# Observe the absolute value of residual
+> reg_rsd$abs_by_lm <- abs(reg_rsd$Residuals_by_using_lm);
+> reg_rsd$abs_by_lm_and_dummy <- abs(reg_rsd$Residuals_by_using_lm_and_dummy_variable);
+> ggplot(reg_rsd, aes(x= abs_by_lm_and_dummy))+ geom_histogram(binwidth=5,aes(fill=..count..))+labs(y = "Frequency", title = "Absolute values of Residuals by using lm with Dummy Variables")+scale_fill_gradient("Count", low = "yellow", high = "blue");
+
+
+ 
+
+# PRED(10) and PRED(20)
+> reg_rsd$Actual_Time <- reg_result$Actual_Time;
+> reg_rsd$pst_rsd_lm <- reg_rsd$abs_by_lm / reg_rsd$Actual_Time * 100;
+> reg_rsd$pst_rsd_lm_and_dummy <- reg_rsd$abs_by_lm_and_dummy / reg_rsd$Actual_Time * 100;
+> summary(reg_rsd$PRED10_ml)
+   Mode   FALSE    TRUE    NA's 
+logical 1139691  132753       0 
+
+> summary(reg_rsd$PRED10_ml_and_dummy)
+   Mode   FALSE    TRUE    NA's 
+logical 1137902  134542       0 
+
+> summary(reg_rsd$PRED20_ml)
+   Mode   FALSE    TRUE    NA's 
+logical  989152  283292       0 
+
+> summary(reg_rsd$PRED20_ml_and_dummy)
+   Mode   FALSE    TRUE    NA's 
+logical  985630  286814       0 
+ 
+
+## Naïve Bayes Classification Model
+# Building Naïve Bayes Model with Original data
+> library("klaR")
+> library("MASS")
+> mdl_nb <- mdl;
+> rn_train_nb <- sample(nrow(mdl_nb),floor(nrow(mdl_nb)*0.9));
+
+> mdl_nb$State <- factor(mdl_nb$State)
+> mdl_nb$Age <- factor(mdl_nb$Age)
+> mdl_nb$Carpool <- factor(mdl_nb$Carpool)
+> mdl_nb$Wage_in_1_Year <- factor(mdl_nb$Wage_in_1_Year)
+> mdl_nb$Working_Hours_Per_Week <- factor(mdl_nb$Working_Hours_Per_Week)
+> mdl_nb$Time_of_Transportation <- factor(mdl_nb$Time_of_Transportation)
+
+> train_nb <- mdl_nb[rn_train,];
+> test_nb <- mdl_nb[-rn_train,];
+> model_nb  <- NaiveBayes(mdl_nb$Time_of_Transportation~.,data=mdl_nb);
+> prediction_nb  <- predict(model_nb ,test_nb );
+> library("lattice");
+> library("caret");
+> cMatrix <- confusionMatrix(prediction_nb$class,test_nb$Time_of_Transportation);
+Overall Statistics
+                                          
+               Accuracy : 0.1594          
+                 95% CI : (0.1574, 0.1614)
+    No Information Rate : 0.1461          
+    P-Value [Acc > NIR] : < 2.2e-16       
+                                          
+                  Kappa : 0.0429          
+ Mcnemar's Test P-Value : NA    
+
+# Convert continuous variables to categorical variables
+> mdl_nb_cat <- mdl
+# Age
+> summary(mdl_nb_cat$Age)
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+  16.00   31.00   43.00   42.16   53.00   67.00 
+
+> mdl_nb_cat$age_sub <- cut(mdl_nb_cat$Age, breaks = seq(15,70,5));
+> levels(mdl_nb_cat $age_sub)
+ [1] "(15,20]" "(20,25]" "(25,30]" "(30,35]" "(35,40]" "(40,45]" "(45,50]" "(50,55]" "(55,60]"
+[10] "(60,65]" "(65,70]"
+
+# Wage
+> summary(mdl_nb_cat $Wage_in_1_Year)
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+      0   15000   33000   46150   59000  660000 
+
+> mdl_nb_cat$wage_sub <- cut(mdl_nb_cat$Wage_in_1_Year, breaks = c(-1,seq(10000,120000,10000),seq(150000,660000,50000)));
+
+> levels(mdl_nb_cat $wage_sub)
+ [1] "(-1,1e+04]"        "(1e+04,2e+04]"     "(2e+04,3e+04]"     "(3e+04,4e+04]"    
+ [5] "(4e+04,5e+04]"     "(5e+04,6e+04]"     "(6e+04,7e+04]"     "(7e+04,8e+04]"    
+ [9] "(8e+04,9e+04]"     "(9e+04,1e+05]"     "(1e+05,1.1e+05]"   "(1.1e+05,1.2e+05]"
+[13] "(1.2e+05,1.5e+05]" "(1.5e+05,2e+05]"   "(2e+05,2.5e+05]"   "(2.5e+05,3e+05]"  
+[17] "(3e+05,3.5e+05]"   "(3.5e+05,4e+05]"   "(4e+05,4.5e+05]"   "(4.5e+05,5e+05]"  
+[21] "(5e+05,5.5e+05]"   "(5.5e+05,6e+05]"   "(6e+05,6.5e+05]"
+
+# Working Hours
+> summary(mdl_nb_cat $Working_Hours_Per_Week)
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   1.00   36.00   40.00   39.35   45.00   99.00 
+
+> mdl_nb_cat$hour_sub <- cut(mdl_nb_cat$Working_Hours_Per_Week, breaks = c(seq(0,30,10),seq(35,45,5), seq(50,100,10)));
+> levels(mdl_nb_cat $hour_sub)
+ [1] "(0,10]"   "(10,20]"  "(20,30]"  "(30,35]"  "(35,40]"  "(40,45]"  "(45,50]"  "(50,60]" 
+ [9] "(60,70]"  "(70,80]"  "(80,90]"  "(90,100]"
+
+#Commuting Time
+> summary(mdl_nb_cat $Time_of_Transportation)
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+   1.00   10.00   20.00   26.13   30.00  167.00 
+> mdl_nb_cat$ct_sub <- cut(mdl_nb_cat$Time_of_Transportation, breaks = c(seq(0,30,5),seq(40,170,10)))
+> levels(mdl_nb_cat $ct_sub)
+ [1] "(0,5]"     "(5,10]"    "(10,15]"   "(15,20]"   "(20,25]"   "(25,30]"   "(30,40]"  
+ [8] "(40,50]"   "(50,60]"   "(60,70]"   "(70,80]"   "(80,90]"   "(90,100]"  "(100,110]"
+[15] "(110,120]" "(120,130]" "(130,140]" "(140,150]" "(150,160]" "(160,170]"
+
+
+# Categorized data
+> mdl_nb_cat <- mdl_nb_cat[-c(2,9,10,13)];
+> mdl_nb_cat$State <- factor(mdl_nb_cat$State);
+> mdl_nb_cat$Age <- factor(mdl_nb_cat$Age);
+> mdl_nb_cat$Carpool <- factor(mdl_nb_cat$Carpool);
+> mdl_nb_cat$Wage_in_1_Year <- factor(mdl_nb_cat$Wage_in_1_Year);
+> mdl_nb_cat$Working_Hours_Per_Week <- factor(mdl_nb_cat$Working_Hours_Per_Week);
+> mdl_nb_cat$Time_of_Transportation <- factor(mdl_nb_cat$Time_of_Transportation);
+
+> rn_train_nb_cat <- sample(nrow(mdl_nb_cat),floor(nrow(mdl_nb_cat)*0.9));
+> train_nb_cat <- mdl_nb_cat [rn_train,];
+> test_nb_cat <- mdl_nb_cat [-rn_train,];
+> model_nb_cat <- NaiveBayes(ct_sub~.,data=mdl_nb_cat);
+> prediction_nb_cat <- predict(model_nb_cat,test_nb_cat);
+> cMatrix_cat <- confusionMatrix(prediction_nb_cat$class,test_nb_cat$ct_sub);
+Overall Statistics
+                                          
+               Accuracy : 0.1834          
+                 95% CI : (0.1812, 0.1855)
+    No Information Rate : 0.1608          
+    P-Value [Acc > NIR] : < 2.2e-16       
+                                          
+                  Kappa : 0.056           
+ Mcnemar's Test P-Value : NA     
+
+
